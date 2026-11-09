@@ -1,0 +1,32 @@
+# Borda da VPS: Caddy (HTTPS automático) + a rede "edge", onde todos os projetos se conectam.
+# Os projetos instalam o próprio trecho de Caddy em ./sites (subdomínios) e ./routes (rotas do domínio principal).
+services:
+  caddy:
+    image: caddy:2
+    container_name: edge-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - ./routes:/etc/caddy/routes:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+    name: edge

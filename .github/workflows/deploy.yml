@@ -1,0 +1,44 @@
+# Deploy da borda (Caddy). Roda manualmente; raramente muda.
+name: Deploy edge
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-edge
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar o compose
+        run: DOMAIN=exemplo.com docker compose config -q
+      - name: Configurar SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Enviar e aplicar
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -i $HOME/.ssh/deploy_key -p $VPS_PORT -o StrictHostKeyChecking=yes $VPS_USER@$VPS_HOST"
+          SCP="scp -i $HOME/.ssh/deploy_key -P $VPS_PORT -o StrictHostKeyChecking=yes"
+          $SSH "mkdir -p /opt/edge/sites /opt/edge/routes"
+          $SCP compose.yml Caddyfile "$VPS_USER@$VPS_HOST:/opt/edge/"
+          $SSH "cd /opt/edge && test -f .env || { echo 'Falta /opt/edge/.env'; exit 1; }"
+          $SSH "cd /opt/edge && docker compose up -d --wait"
+          $SSH "docker exec edge-caddy caddy validate --config /etc/caddy/Caddyfile && docker exec edge-caddy caddy reload --config /etc/caddy/Caddyfile"

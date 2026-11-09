@@ -1,0 +1,19 @@
+# Domínio principal: site estático (portfolio-site) + rotas que os projetos registram em routes/*.caddy
+# (ex.: /api/chat -> portfolio-chat). Subdomínios (filmes., planilhas., ...) ficam em sites/*.caddy.
+# Cada projeto instala o seu arquivo no deploy e recarrega o Caddy; nada aqui precisa mudar por projeto.
+{$DOMAIN} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+	}
+
+	import /etc/caddy/routes/*.caddy
+
+	handle {
+		reverse_proxy site:8080
+	}
+}
+
+import /etc/caddy/sites/*.caddy
